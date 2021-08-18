@@ -1,73 +1,113 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo_text.svg" width="320" alt="Nest Logo" /></a>
-</p>
+# NestJS 代码覆盖率生成
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-  
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 原理介绍
 
-## Description
+1. nyc 可以理解为是一个编译器，它的作用是对源代码进行插桩, 插入的代码会对全局对象 ```__coverage__``` 进行修改，这个全局对象会包含所有代码执行的信息，因此我们可以通过读取 ```__coverage__``` 即时生成测试覆盖率报告
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+2. nyc 提供了从 ```__coverage__``` 对象转成覆盖率报告的 api，我们可以在某个接口调用时调用 nyc 的这个 api, 从 ```__coverage__``` 对象生成 html 文件
 
-## Installation
 
-```bash
-$ npm install
+## 配置 nyc 
+
+1. 添加依赖
+
+```sh
+npm i -D nyc ts-node source-map-support @istanbuljs/nyc-config-typescript
+npm i @nestjs/serve-static
 ```
 
-## Running the app
 
-```bash
-# development
-$ npm run start
+2. 配置启动参数
 
-# watch mode
-$ npm run start:dev
+在 package.json 的脚本中添加一项 cov
 
-# production mode
-$ npm run start:prod
+```json
+{
+  "scripts": {
+    "cov": "rm -rf dist && nyc npm run start"
+  }
+}
 ```
 
-## Test
+3. 配置静态文件夹
 
-```bash
-# unit tests
-$ npm run test
+nyc 编译输出的 html 文件会放置在进程工作目录下的 coverage 文件夹下，为了能在浏览器中访问 coverage 下的内容，需要在 app.module.ts 中配置静态资源目录
 
-# e2e tests
-$ npm run test:e2e
+```typescript
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
-# test coverage
-$ npm run test:cov
+@Module({
+  imports: [
+    ServeStaticModule.forRoot({
+      // 这个相对路径表示的是进程的工作目录下的 converage
+      rootPath: 'coverage',
+      // 路径前缀是 /coverage
+      serveRoot: '/coverage',
+    }),
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
 ```
 
-## Support
+4. 配置触发器
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+触发器的思路:当访问 GET /coverage.x 时，把全局变量 ```__coverage``` 写入到文件 ```.nyc_output/out.json``` 中，然后调用 shell 命令 ```nyc report --reporter=html``` 生成报告，最后重定向到生成的报告页面
 
-## Stay in touch
+```ts
+import { Controller, Get, Res } from '@nestjs/common';
+import { AppService } from './app.service';
+import { Response } from 'express';
+import cp = require('child_process');
+import fs = require('fs');
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
 
-## License
+  @Get('/hello')
+  getHello(): string {
+    return this.appService.getHello();
+  }
 
-  Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+  @Get('/coverage.x')
+  getCoverage(@Res() res: Response): void {
+    // generate coverage files and redirect to coverage/index.html
+    const cov = global['__coverage__'];
+    if (!cov) {
+      res.send('nyc not configured right');
+      return;
+    }
+
+    // make directory
+    cp.execSync('mkdir -p .nyc_output');
+
+    // write cov to file
+    const fd = fs.openSync('.nyc_output/out.json', 'w', '0666');
+    fs.writeSync(fd, JSON.stringify(cov));
+    fs.closeSync(fd);
+
+    // generate coverages
+    cp.execSync('./node_modules/.bin/nyc report --reporter=html');
+    res.redirect('/coverage/index.html');
+  }
+}
+```
+
+## 生成实时覆盖率报告
+
+1. 通过 nyc 代理启动 nestjs 
+
+```sh
+npm run cov
+```
+
+2. 在浏览器访问 http://localhost:3000/coverage.x
+
+
+
