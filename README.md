@@ -57,7 +57,7 @@ export class AppModule {}
 
 4. 配置触发器
 
-触发器的思路:当访问 GET /coverage.x 时，把全局变量 ```__coverage``` 写入到文件 ```.nyc_output/out.json``` 中，然后调用 shell 命令 ```nyc report --reporter=html``` 生成报告，最后重定向到生成的报告页面
+触发器的思路:当访问 GET /coverage.x 时，把全局变量 ```__coverage__``` 写入到文件 ```.nyc_output/out.json``` 中，然后调用 shell 命令 ```nyc report --reporter=html``` 生成报告，最后重定向到生成的报告页面
 
 ```ts
 import { Controller, Get, Res } from '@nestjs/common';
