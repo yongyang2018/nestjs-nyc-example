@@ -48,7 +48,7 @@ import { join } from 'path';
 @Module({
   imports: [
     ServeStaticModule.forRoot({
-      // 这个相对路径表示的是进程的工作目录下的 converage
+      // 这个相对路径表示的是进程的工作目录下的 coverage
       rootPath: 'coverage',
       // 路径前缀是 /coverage
       serveRoot: '/coverage',
