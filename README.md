@@ -6,6 +6,11 @@
 
 2. nyc 提供了从 ```__coverage__``` 对象转成覆盖率报告的 api，我们可以在某个接口调用时调用 nyc 的这个 api, 从 ```__coverage__``` 对象生成 html 文件
 
+## 报告效果图
+
+![pic01](./pics/pic01.png "pics/pic01.png")
+
+![pic02](./pics/pic02.png "pics/pic02.png")
 
 ## 配置 nyc 
 
